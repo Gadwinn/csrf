@@ -11,20 +11,6 @@ use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\{ResponseInterface, ServerRequestInterface};
 use Psr\Http\Server\{MiddlewareInterface, RequestHandlerInterface};
 
-// Subclasses used by attribute tests - must be declared at file scope.
-
-#[CsrfConfig(tokenField: '_csrf')]
-class TokenFieldMiddleware extends CsrfMiddleware {}
-
-#[CsrfConfig(supervisedMethods: ['POST'])]
-class PostOnlyMiddleware extends CsrfMiddleware {}
-
-#[CsrfConfig(tokenKeyAttribute: 'my_csrf_key')]
-class CustomKeyMiddleware extends CsrfMiddleware {}
-
-#[CsrfConfig(tokenHeaders: ['X-Custom-Token'])]
-class CustomHeaderMiddleware extends CsrfMiddleware {}
-
 class CsrfMiddlewareTest extends TestCase
 {
     private function makeCsrf(bool $valid): CsrfManager
@@ -135,7 +121,7 @@ class CsrfMiddlewareTest extends TestCase
         ];
     }
 
-    // --- CsrfConfig attribute ---
+    // --- CsrfConfig ---
 
     public function testDefaultsMatchConstants(): void
     {
@@ -144,7 +130,7 @@ class CsrfMiddlewareTest extends TestCase
         $this->assertSame(CsrfMiddleware::TOKEN_KEY_ATTRIBUTE, $middleware->tokenKeyAttribute);
     }
 
-    public function testCustomTokenFieldViaAttribute(): void
+    public function testCustomTokenFieldViaConfig(): void
     {
         $csrf = $this->createMock(CsrfManager::class);
         $csrf->expects($this->once())->method('isValid')->with('tok', 'my_form')->willReturn(true);
@@ -152,7 +138,7 @@ class CsrfMiddlewareTest extends TestCase
         // Body uses '_csrf' - default '_token' would be ignored
         $request = $this->makeRequest('POST', ['_csrf' => 'tok']);
 
-        (new TokenFieldMiddleware($csrf))->process($request, $this->makeHandler());
+        (new CsrfMiddleware($csrf, config: new CsrfConfig(tokenField: '_csrf')))->process($request, $this->makeHandler());
     }
 
     public function testDefaultTokenFieldIgnoredWhenCustomField(): void
@@ -163,10 +149,10 @@ class CsrfMiddlewareTest extends TestCase
         // Body has '_token' but middleware expects '_csrf' → falls back to empty string
         $request = $this->makeRequest('POST', ['_token' => 'tok']);
 
-        (new TokenFieldMiddleware($csrf, $this->makeHandler()))->process($request, $this->makeHandler());
+        (new CsrfMiddleware($csrf, $this->makeHandler(), config: new CsrfConfig(tokenField: '_csrf')))->process($request, $this->makeHandler());
     }
 
-    public function testCustomSupervisedMethodsViaAttribute(): void
+    public function testCustomSupervisedMethodsViaConfig(): void
     {
         $csrf = $this->createMock(CsrfManager::class);
         $csrf->expects($this->never())->method('isValid');
@@ -174,7 +160,7 @@ class CsrfMiddlewareTest extends TestCase
         $response = $this->createStub(ResponseInterface::class);
 
         // DELETE is not supervised in PostOnlyMiddleware
-        $result = (new PostOnlyMiddleware($csrf))->process(
+        $result = (new CsrfMiddleware($csrf, config: new CsrfConfig(supervisedMethods: ['POST'])))->process(
             $this->makeRequest('DELETE'),
             $this->makeHandler($response)
         );
@@ -187,30 +173,30 @@ class CsrfMiddlewareTest extends TestCase
         $csrf = $this->createMock(CsrfManager::class);
         $csrf->expects($this->once())->method('isValid')->willReturn(true);
 
-        (new PostOnlyMiddleware($csrf))->process(
+        (new CsrfMiddleware($csrf, config: new CsrfConfig(supervisedMethods: ['POST'])))->process(
             $this->makeRequest('POST', ['_token' => 'tok']),
             $this->makeHandler()
         );
     }
 
-    public function testCustomTokenKeyAttributeViaAttribute(): void
+    public function testCustomTokenKeyAttributeViaConfig(): void
     {
         $csrf = $this->createMock(CsrfManager::class);
         $csrf->expects($this->once())->method('isValid')->with('tok', 'my_form')->willReturn(true);
 
-        $this->assertSame('my_csrf_key', (new CustomKeyMiddleware($csrf))->tokenKeyAttribute);
+        $this->assertSame('my_csrf_key', (new CsrfMiddleware($csrf, config: new CsrfConfig(tokenKeyAttribute: 'my_csrf_key')))->tokenKeyAttribute);
 
         $request = $this->makeRequest('POST', ['_token' => 'tok'], [], 'my_form', 'my_csrf_key');
-        (new CustomKeyMiddleware($csrf))->process($request, $this->makeHandler());
+        (new CsrfMiddleware($csrf, config: new CsrfConfig(tokenKeyAttribute: 'my_csrf_key')))->process($request, $this->makeHandler());
     }
 
-    public function testCustomTokenHeaderViaAttribute(): void
+    public function testCustomTokenHeaderViaConfig(): void
     {
         $csrf = $this->createMock(CsrfManager::class);
         $csrf->expects($this->once())->method('isValid')->with('hdr-tok', 'my_form')->willReturn(true);
 
         $request = $this->makeRequest('POST', null, ['X-Custom-Token' => 'hdr-tok']);
-        (new CustomHeaderMiddleware($csrf))->process($request, $this->makeHandler());
+        (new CsrfMiddleware($csrf, config: new CsrfConfig(tokenHeaders: ['X-Custom-Token'])))->process($request, $this->makeHandler());
     }
 
     public function testDefaultXCsrfHeaderIgnoredWhenCustomHeader(): void
@@ -220,7 +206,7 @@ class CsrfMiddlewareTest extends TestCase
         $csrf->expects($this->once())->method('isValid')->with('', 'my_form')->willReturn(false);
 
         $request = $this->makeRequest('POST', null, ['X-CSRF-Token' => 'tok']);
-        (new CustomHeaderMiddleware($csrf, $this->makeHandler()))->process($request, $this->makeHandler());
+        (new CsrfMiddleware($csrf, $this->makeHandler(), config: new CsrfConfig(tokenHeaders: ['X-Custom-Token'])))->process($request, $this->makeHandler());
     }
 
     // --- Token key from request attribute ---
