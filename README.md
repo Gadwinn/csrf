@@ -18,15 +18,17 @@ composer require gadwinn/csrf
 
 ---
 
-## Session Configuration via `#[SessionConfig]`
+## Session Configuration via `SessionConfig`
 
-`SessionTokenStorage` can be fully configured by subclassing and applying the `#[SessionConfig]` attribute. This is the recommended approach for production - it co-locates the session policy with the storage class and is applied automatically before `session_start()`.
+`SessionTokenStorage` starts the session itself when none is active. Pass it a `SessionConfig` to apply your session policy before `session_start()` - this is the recommended approach for production:
 
 ```php
+use G\Csrf\CsrfManager;
+use G\Csrf\TokenGenerator\RandomTokenGenerator;
 use G\Csrf\TokenStorage\SessionConfig;
 use G\Csrf\TokenStorage\SessionTokenStorage;
 
-#[SessionConfig(
+$storage = new SessionTokenStorage(new SessionConfig(
     name: '__Secure-app_session',
     savePath: '/var/lib/php/sessions/myapp',
     cacheLimiter: 'nocache',
@@ -36,26 +38,22 @@ use G\Csrf\TokenStorage\SessionTokenStorage;
     cookieSecure: true,
     cookieHttponly: true,
     cookieSamesite: 'Strict',
-)]
-class AppSessionStorage extends SessionTokenStorage {}
-```
+));
 
-```php
-$csrf = new CsrfManager(new RandomTokenGenerator(), new AppSessionStorage());
+$csrf = new CsrfManager(new RandomTokenGenerator(), $storage);
 ```
 
 The session key names are also configurable:
 
 ```php
-#[SessionConfig(sessionKey: '_app_csrf', defaultKey: '_global')]
-class AppSessionStorage extends SessionTokenStorage {}
+new SessionTokenStorage(new SessionConfig(sessionKey: '_app_csrf', defaultKey: '_global'));
 ```
 
-> Session settings are applied **only when the session is not yet active**. If you start the session yourself before instantiation, the attribute's settings are ignored (the session is already configured).
+> Session settings are applied **only when the session is not yet active**. If you start the session yourself before instantiation, the session settings are ignored (the session is already configured).
 >
 > The session is checked again on every operation: in a long-running worker (FrankenPHP worker mode…), the same storage instance reopens the session of each new request by itself.
 
-### All `#[SessionConfig]` options
+### All `SessionConfig` options
 
 | Parameter | PHP function | Default |
 |---|---|---|
@@ -193,6 +191,7 @@ Same behavior as `name[]` with an explicit maximum size.
 
 ```php
 new SessionTokenStorage(
+    config: new SessionConfig(), // storage keys and session settings
     defaultMaxTokens: 10,   // default stack size for name[] syntax
     ttl: 1800               // token lifetime in seconds (default: 30 min)
 )
@@ -311,19 +310,18 @@ $csrf = new CsrfManager(new RandomTokenGenerator(), new SessionTokenStorage());
 $middleware = new CsrfMiddleware($csrf);
 ```
 
-### Configuration via `#[CsrfConfig]`
+### Configuration via `CsrfConfig`
 
-Override defaults by subclassing with the `#[CsrfConfig]` attribute:
+Override the defaults with a `CsrfConfig`:
 
 ```php
 use G\Csrf\Middleware\CsrfConfig;
 use G\Csrf\Middleware\CsrfMiddleware;
 
-#[CsrfConfig(
+$middleware = new CsrfMiddleware($csrf, config: new CsrfConfig(
     tokenField: '_csrf',
     supervisedMethods: ['POST', 'PUT'],
-)]
-class StrictCsrfMiddleware extends CsrfMiddleware {}
+));
 ```
 
 | Parameter | Default | Description |

@@ -8,30 +8,6 @@ use G\Csrf\TokenStorage\SessionConfig;
 use G\Csrf\TokenStorage\SessionTokenStorage;
 use PHPUnit\Framework\TestCase;
 
-// Subclasses used by attribute tests - must be declared at file scope.
-
-#[SessionConfig(sessionKey: '_custom_csrf')]
-class CustomKeyStorage extends SessionTokenStorage {}
-
-#[SessionConfig(defaultKey: '_main')]
-class CustomDefaultKeyStorage extends SessionTokenStorage {}
-
-#[SessionConfig(name: 'TestApp')]
-class NamedSessionStorage extends SessionTokenStorage {}
-
-#[SessionConfig(cookieSecure: true, cookieHttponly: true, cookieSamesite: 'Strict')]
-class SecureSessionStorage extends SessionTokenStorage {}
-
-#[SessionConfig(
-    moduleName: 'files',
-    cacheLimiter: 'nocache',
-    cacheExpire: 180,
-    cookieLifetime: 3600,
-    cookiePath: '/app',
-    cookieDomain: 'example.com',
-)]
-class FullConfigStorage extends SessionTokenStorage {}
-
 class SessionTokenStorageTest extends TestCase
 {
     use ExpiresTokensTrait;
@@ -70,11 +46,11 @@ class SessionTokenStorageTest extends TestCase
         $this->assertSame(PHP_SESSION_ACTIVE, session_status());
     }
 
-    // --- SessionConfig attribute: storage keys ---
+    // --- SessionConfig: storage keys ---
 
-    public function testCustomSessionKeyViaAttribute(): void
+    public function testCustomSessionKeyViaConfig(): void
     {
-        $storage = new CustomKeyStorage();
+        $storage = new SessionTokenStorage(new SessionConfig(sessionKey: '_custom_csrf'));
         $storage->setToken('tok', 'form');
 
         $this->assertArrayHasKey('_custom_csrf', $_SESSION);
@@ -84,15 +60,15 @@ class SessionTokenStorageTest extends TestCase
     public function testCustomSessionKeyDoesNotWriteToDefaultKey(): void
     {
         $_SESSION = [];
-        new CustomKeyStorage();
+        new SessionTokenStorage(new SessionConfig(sessionKey: '_custom_csrf'));
 
         $this->assertArrayNotHasKey('_csrf_tokens', $_SESSION);
         $this->assertArrayHasKey('_custom_csrf', $_SESSION);
     }
 
-    public function testCustomDefaultKeyViaAttribute(): void
+    public function testCustomDefaultKeyViaConfig(): void
     {
-        $storage = new CustomDefaultKeyStorage();
+        $storage = new SessionTokenStorage(new SessionConfig(defaultKey: '_main'));
         $storage->setToken('tok', null);
 
         // Token stored under '_main' not '_default'
@@ -101,14 +77,14 @@ class SessionTokenStorageTest extends TestCase
         $this->assertArrayNotHasKey('_default', $_SESSION['_csrf_tokens']);
     }
 
-    // --- SessionConfig attribute: session settings applied before session_start() ---
+    // --- SessionConfig: session settings applied before session_start() ---
 
     public function testSessionNameAppliedWhenSessionNotStarted(): void
     {
         session_write_close();
         $this->assertSame(PHP_SESSION_NONE, session_status());
 
-        new NamedSessionStorage();
+        new SessionTokenStorage(new SessionConfig(name: 'TestApp'));
 
         $this->assertSame('TestApp', session_name());
         $this->assertSame(PHP_SESSION_ACTIVE, session_status());
@@ -119,7 +95,7 @@ class SessionTokenStorageTest extends TestCase
         session_write_close();
         $this->assertSame(PHP_SESSION_NONE, session_status());
 
-        new SecureSessionStorage();
+        new SessionTokenStorage(new SessionConfig(cookieSecure: true, cookieHttponly: true, cookieSamesite: 'Strict'));
 
         $params = session_get_cookie_params();
         $this->assertTrue($params['secure']);
@@ -132,7 +108,7 @@ class SessionTokenStorageTest extends TestCase
         session_write_close();
         $this->assertSame(PHP_SESSION_NONE, session_status());
 
-        new FullConfigStorage();
+        new SessionTokenStorage(new SessionConfig(moduleName: 'files', cacheLimiter: 'nocache', cacheExpire: 180, cookieLifetime: 3600, cookiePath: '/app', cookieDomain: 'example.com'));
 
         $this->assertSame('nocache', session_cache_limiter());
         $this->assertSame(180, session_cache_expire());
@@ -149,7 +125,7 @@ class SessionTokenStorageTest extends TestCase
         $nameBefore = session_name();
 
         // NamedSessionStorage wants to set name='TestApp', but session is already active
-        new NamedSessionStorage();
+        new SessionTokenStorage(new SessionConfig(name: 'TestApp'));
 
         // Name unchanged - applySessionConfig was skipped
         $this->assertSame($nameBefore, session_name());

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace G\Csrf\Middleware;
 
-#[\Attribute(\Attribute::TARGET_CLASS)]
+/**
+ * Settings of CsrfMiddleware.
+ */
 final class CsrfConfig
 {
     /**

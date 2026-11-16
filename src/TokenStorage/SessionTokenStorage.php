@@ -5,47 +5,37 @@ declare(strict_types=1);
 namespace G\Csrf\TokenStorage;
 
 /**
- * @phpstan-type CsrfToken array{value: string, expires_at: int}
- * @phpstan-type CsrfTokensMap array<string, CsrfToken|list<CsrfToken>>
+ * Stores the tokens in the PHP session.
  *
- * Configure via #[SessionConfig] on a subclass:
+ * The session is started on demand, with the settings of the SessionConfig:
  *
- *   #[SessionConfig(
+ *   new SessionTokenStorage(new SessionConfig(
  *       name: '__Secure-app',
  *       cookieSecure: true,
  *       cookieHttponly: true,
  *       cookieSamesite: 'Strict',
- *   )]
- *   class AppSessionStorage extends SessionTokenStorage {}
+ *   ));
+ *
+ * @phpstan-type CsrfToken array{value: string, expires_at: int}
+ * @phpstan-type CsrfTokensMap array<string, CsrfToken|list<CsrfToken>>
  */
 class SessionTokenStorage implements TokenStorageInterface
 {
-    private readonly string $sessionKey;
-    private readonly string $defaultKey;
-
     /**
-     * @param string $sessionKey $_SESSION key used to store all CSRF tokens
-     * @param string $defaultKey Key used when no named key is provided
+     * @param SessionConfig $config Storage keys and session settings
      * @param int $defaultMaxTokens Default maximum number of tokens to store for stack keys (e.g. "form[5]")
      * when the max is not specified in the key.
      * @param int $ttl Time-to-live for tokens in seconds.
-     * @return void
      */
     public function __construct(
-        string $sessionKey = '_csrf_tokens',
-        string $defaultKey = '_default',
+        private readonly SessionConfig $config = new SessionConfig(),
         private readonly int $defaultMaxTokens = 10,
         private readonly int $ttl = 1800,
     ) {
-        $config = $this->resolveConfig();
-
-        $this->sessionKey = $config->sessionKey ?? $sessionKey;
-        $this->defaultKey = $config->defaultKey ?? $defaultKey;
-
         $this->ensureSession();
 
-        if (!isset($_SESSION[$this->sessionKey])) {
-            $_SESSION[$this->sessionKey] = [];
+        if (!isset($_SESSION[$this->config->sessionKey])) {
+            $_SESSION[$this->config->sessionKey] = [];
         }
     }
 
@@ -133,7 +123,7 @@ class SessionTokenStorage implements TokenStorageInterface
      */
     private function parseKey(?string $key): array
     {
-        $key ??= $this->defaultKey;
+        $key ??= $this->config->defaultKey;
 
         if (preg_match('/^(.+?)\[(\d*)\]$/D', $key, $matches)) {
             return [$matches[1], (int) $matches[2] ?: $this->defaultMaxTokens];
@@ -170,7 +160,7 @@ class SessionTokenStorage implements TokenStorageInterface
     private function ensureSession(): void
     {
         if (session_status() === PHP_SESSION_NONE) {
-            $this->applySessionConfig($this->resolveConfig());
+            $this->applySessionConfig($this->config);
             session_start();
         }
     }
@@ -228,13 +218,6 @@ class SessionTokenStorage implements TokenStorageInterface
         }
     }
 
-    private function resolveConfig(): SessionConfig
-    {
-        $attrs = (new \ReflectionClass(static::class))->getAttributes(SessionConfig::class);
-
-        return $attrs !== [] ? $attrs[0]->newInstance() : new SessionConfig();
-    }
-
     /**
      * Returns the stored tokens that have not expired yet.
      *
@@ -246,7 +229,7 @@ class SessionTokenStorage implements TokenStorageInterface
 
         $now = time();
         $tokens = [];
-        $stored = $_SESSION[$this->sessionKey] ?? [];
+        $stored = $_SESSION[$this->config->sessionKey] ?? [];
 
         foreach (is_array($stored) ? $stored : [] as $name => $data) {
             if (!is_array($data)) {
@@ -279,6 +262,6 @@ class SessionTokenStorage implements TokenStorageInterface
      */
     private function setTokens(array $tokens): void
     {
-        $_SESSION[$this->sessionKey] = $tokens;
+        $_SESSION[$this->config->sessionKey] = $tokens;
     }
 }

@@ -7,28 +7,26 @@ namespace G\Csrf\TokenStorage;
 /**
  * @phpstan-type SameSite 'Lax'|'lax'|'None'|'none'|'Strict'|'strict'
  *
- * Attribute to configure SessionTokenStorage via subclassing.
+ * Settings of SessionTokenStorage.
  *
- * Storage keys and session settings are applied before session_start(),
+ * Session settings are applied before session_start(),
  * only when the session is not yet active.
  *
  * Usage:
  *
- *   #[SessionConfig(
+ *   new SessionTokenStorage(new SessionConfig(
  *       name: '__Secure-app',
  *       savePath: '/var/lib/php/sessions/myapp',
  *       cookieSecure: true,
  *       cookieHttponly: true,
  *       cookieSamesite: 'Strict',
- *   )]
- *   class AppSessionStorage extends SessionTokenStorage {}
+ *   ));
  */
-#[\Attribute(\Attribute::TARGET_CLASS)]
 final class SessionConfig
 {
     /**
-     * @param string|null $sessionKey $_SESSION key used to store all CSRF tokens
-     * @param string|null $defaultKey Key used when no named key is provided
+     * @param string $sessionKey $_SESSION key used to store all CSRF tokens
+     * @param string $defaultKey Key used when no named key is provided
      * @param string|null $name session_name()
      * @param string|null $savePath session_save_path()
      * @param string|null $moduleName session_module_name()
@@ -43,8 +41,8 @@ final class SessionConfig
      * @param string|null $cookieSamesite 'None', 'Lax', or 'Strict'
      */
     public function __construct(
-        public readonly ?string $sessionKey = null,
-        public readonly ?string $defaultKey = null,
+        public readonly string $sessionKey = '_csrf_tokens',
+        public readonly string $defaultKey = '_default',
         public readonly ?string $name = null,
         public readonly ?string $savePath = null,
         public readonly ?string $moduleName = null,
