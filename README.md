@@ -359,3 +359,7 @@ class CsrfFailureHandler implements RequestHandlerInterface
 
 $middleware = new CsrfMiddleware($csrf, new CsrfFailureHandler());
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE).
