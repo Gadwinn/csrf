@@ -11,10 +11,9 @@ use Psr\Http\Server\{MiddlewareInterface, RequestHandlerInterface};
 /**
  * PSR-15 CSRF middleware powered by gadwinn/csrf.
  *
- * Configure via #[CsrfConfig] on a subclass to override defaults:
+ * Defaults are overridden with a CsrfConfig:
  *
- *   #[CsrfConfig(tokenField: '_csrf', supervisedMethods: ['POST', 'PUT'])]
- *   class MyCsrfMiddleware extends CsrfMiddleware {}
+ *   new CsrfMiddleware($csrf, config: new CsrfConfig(tokenField: '_csrf', supervisedMethods: ['POST', 'PUT']));
  */
 class CsrfMiddleware implements MiddlewareInterface
 {
@@ -22,24 +21,16 @@ class CsrfMiddleware implements MiddlewareInterface
     public const TOKEN_KEY_ATTRIBUTE = 'csrf_key';
 
     /** @var list<string> */
-    private array $tokenHeaders;
-
-    /** @var list<string> */
-    private array $supervisedMethods;
-
-    private string $tokenField;
+    private readonly array $supervisedMethods;
 
     public readonly string $tokenKeyAttribute;
 
     public function __construct(
         private readonly CsrfManagerInterface $csrf,
-        private readonly RequestHandlerInterface $failureHandler = new FailureRequestHandler()
+        private readonly RequestHandlerInterface $failureHandler = new FailureRequestHandler(),
+        private readonly CsrfConfig $config = new CsrfConfig(),
     ) {
-        $config = $this->resolveConfig();
-
         $this->tokenKeyAttribute = $config->tokenKeyAttribute;
-        $this->tokenField = $config->tokenField;
-        $this->tokenHeaders = $config->tokenHeaders;
         $this->supervisedMethods = array_map('strtoupper', $config->supervisedMethods);
     }
 
@@ -65,13 +56,13 @@ class CsrfMiddleware implements MiddlewareInterface
         $body = $request->getParsedBody();
 
         if (is_array($body)) {
-            $fieldValue = $body[$this->tokenField] ?? null;
+            $fieldValue = $body[$this->config->tokenField] ?? null;
             if (is_string($fieldValue) && $fieldValue !== '') {
                 return $fieldValue;
             }
         }
 
-        foreach ($this->tokenHeaders as $header) {
+        foreach ($this->config->tokenHeaders as $header) {
             $value = $request->getHeaderLine($header);
             if ($value !== '') {
                 return $value;
@@ -79,12 +70,5 @@ class CsrfMiddleware implements MiddlewareInterface
         }
 
         return '';
-    }
-
-    private function resolveConfig(): CsrfConfig
-    {
-        $attrs = (new \ReflectionClass(static::class))->getAttributes(CsrfConfig::class);
-
-        return $attrs !== [] ? $attrs[0]->newInstance() : new CsrfConfig();
     }
 }
